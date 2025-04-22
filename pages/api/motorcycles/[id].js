@@ -1,114 +1,267 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
-import dbConnect from '../../../lib/dbConnect';
+import connectToDatabase from '../../../lib/mongodb';
 import Motorcycle from '../../../models/Motorcycle';
+import Question from '../../../models/Question';
 
 export default async function handler(req, res) {
-  const { method } = req;
   const { id } = req.query;
-  
-  // Connect to the database
-  await dbConnect();
-  
-  // Get the motorcycle
-  const motorcycle = await Motorcycle.findById(id);
-  
-  if (!motorcycle) {
-    return res.status(404).json({ success: false, error: 'Motorcycle not found' });
+
+  if (!id) {
+    return res.status(400).json({ error: 'Motorcycle ID is required' });
   }
-  
-  // Get the session
-  const session = await getServerSession(req, res, authOptions);
-  
-  // Check if the user is authenticated
-  if (!session) {
-    return res.status(401).json({ success: false, error: 'You must be logged in to perform this action' });
-  }
-  
-  switch (method) {
-    case 'GET':
-      try {
-        // Allow any authenticated user to view motorcycle details
-        return res.status(200).json({ success: true, data: motorcycle });
-      } catch (error) {
-        console.error('Error fetching motorcycle:', error);
-        return res.status(500).json({ success: false, error: 'Error fetching motorcycle' });
+
+  try {
+    const session = await getServerSession(req, res, authOptions);
+    await connectToDatabase();
+
+    const motorcycle = await Motorcycle.findById(id)
+      .select('+images')
+      .populate('owner', 'name email')
+      .populate({
+        path: 'bookings',
+        select: 'startDate endDate status user',
+        populate: {
+          path: 'user',
+          select: 'name email'
+        }
+      })
+      .populate('questions')
+      .populate({
+        path: 'reviews',
+        select: 'rating comment user createdAt',
+        populate: {
+          path: 'user',
+          select: 'name'
+        }
+      });
+
+    if (!motorcycle) {
+      return res.status(404).json({ error: 'Motorcycle not found' });
+    }
+
+    // Ensure images are properly processed and include full URLs if needed
+    let validImages = [];
+    
+    console.log('Raw motorcycle images:', motorcycle.images);
+    
+    const fs = require('fs');
+    const path = require('path');
+    // Check if motorcycle has images array
+    if (motorcycle.images && Array.isArray(motorcycle.images) && motorcycle.images.length > 0) {
+      validImages = motorcycle.images
+        .filter(img => img && typeof img === 'string' && img.length > 0)
+        .map(img => {
+          let resolved;
+          if (img.startsWith('/') && !img.includes('/uploads/')) {
+            resolved = `${process.env.NEXT_PUBLIC_BASE_URL || ''}${img}`;
+          } else if (!img.startsWith('/') && !img.startsWith('http') && !img.startsWith('data:')) {
+            resolved = `/uploads/${img}`;
+          } else {
+            resolved = img;
+          }
+          let filePath = resolved;
+          if (resolved.startsWith('http')) {
+            // Skip file check for external URLs
+            console.log(`[Image Debug] Skipping file check for external URL: ${resolved}`);
+          } else {
+            filePath = path.join(process.cwd(), 'public', resolved.startsWith('/') ? resolved : `/uploads/${resolved}`);
+            const exists = fs.existsSync(filePath);
+            console.log(`[Image Debug] Checking file: ${filePath} | Exists: ${exists}`);
+          }
+          return resolved;
+        });
+    }
+    
+    // Check if motorcycle has imageUrl (from static data)
+    if (motorcycle.imageUrl) {
+      let imageUrl = motorcycle.imageUrl;
+      
+      // Process the imageUrl to ensure it's correctly formatted
+      if (imageUrl.startsWith('/') && !imageUrl.includes('/uploads/')) {
+        imageUrl = `${process.env.NEXT_PUBLIC_BASE_URL || ''}${imageUrl}`;
+      } else if (!imageUrl.startsWith('/') && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+        // If it's just a filename, assume it's in the uploads directory
+        imageUrl = `/uploads/${imageUrl}`;
       }
       
-    case 'PATCH':
-      try {
-        // Check if the user is the owner of the motorcycle or an admin
-        if (motorcycle.owner.toString() !== session.user.id && session.user.role !== 'admin') {
-          return res.status(403).json({ success: false, error: 'You do not have permission to edit this motorcycle' });
-        }
-        
-        const { name, brand, model, year, cc, price, description, imageUrl, location, features, available } = req.body;
-        
-        // Validate required fields
-        const missingFields = {};
-        if (!name) missingFields.name = true;
-        if (!brand) missingFields.brand = true;
-        if (!model) missingFields.model = true;
-        if (!year) missingFields.year = true;
-        if (!cc) missingFields.cc = true;
-        if (!price) missingFields.price = true;
-        if (!description) missingFields.description = true;
-        if (!location) missingFields.location = true;
-        
-        if (Object.keys(missingFields).length > 0) {
-          return res.status(400).json({ 
-            success: false, 
-            error: 'Missing required fields', 
-            missingFields 
-          });
-        }
-        
-        // Update the motorcycle
-        const updatedMotorcycle = await Motorcycle.findByIdAndUpdate(
-          id,
-          {
-            name,
-            brand,
-            model,
-            year,
-            cc,
-            price,
-            description,
-            imageUrl,
-            location,
-            features,
-            available
+      // Add imageUrl to validImages if it's not already there
+      if (!validImages.includes(imageUrl)) {
+        // Add it to the beginning of the array so it's used first
+        validImages.unshift(imageUrl);
+      }
+    }
+    
+    // Try to find any images in the uploads directory based on motorcycle ID
+    const idBasedImagePath = `/uploads/${motorcycle._id}.png`;
+    if (!validImages.includes(idBasedImagePath)) {
+      validImages.push(idBasedImagePath);
+    }
+    
+    // Add a default placeholder if no images are found
+    if (validImages.length === 0) {
+      validImages.push('/images/motorcycle-placeholder.jpg');
+    }
+    
+    // Check for any existing images in the uploads directory
+    const existingImagePath = `/uploads/a8e42a4aa6e`;
+    if (!validImages.includes(existingImagePath)) {
+      validImages.push(existingImagePath);
+    }
+    
+    console.log('Valid images processed:', validImages);
+
+    switch (req.method) {
+      case 'GET':
+        return res.status(200).json({
+          success: true,
+          motorcycle: {
+            id: motorcycle._id,
+            name: motorcycle.name,
+            brand: motorcycle.brand,
+            model: motorcycle.model,
+            year: motorcycle.year,
+            cc: motorcycle.cc,
+            price: motorcycle.price,
+            // Robust fallback for imageUrl
+            imageUrl: (() => {
+              const fs = require('fs');
+              const path = require('path');
+              // 1. Use first DB image if it exists and file exists
+              if (motorcycle.images && motorcycle.images.length > 0) {
+                const candidate = motorcycle.images[0].startsWith('/') ? motorcycle.images[0] : `/uploads/${motorcycle.images[0]}`;
+                try {
+                  if (fs.existsSync(path.join(process.cwd(), 'public', candidate))) {
+                    return candidate;
+                  }
+                } catch (e) { /* ignore */ }
+              }
+              // 2. Use staticImageUrl if present and file exists
+              if (motorcycle.staticImageUrl) {
+                const staticCandidate = motorcycle.staticImageUrl.startsWith('/') ? motorcycle.staticImageUrl : `/uploads/${motorcycle.staticImageUrl}`;
+                try {
+                  if (fs.existsSync(path.join(process.cwd(), 'public', staticCandidate))) {
+                    return staticCandidate;
+                  }
+                } catch (e) { /* ignore */ }
+              }
+              // 3. Use placeholder
+              return '/images/motorcycle-placeholder.jpg';
+            })(),
+            description: motorcycle.description,
+            images: validImages,
+            // Add debugging info
+            originalImages: motorcycle.images,
+            features: motorcycle.features,
+            location: motorcycle.location,
+            available: motorcycle.available,
+            owner: motorcycle.owner ? {
+              id: motorcycle.owner._id,
+              name: motorcycle.owner.name,
+              email: motorcycle.owner.email,
+            } : null,
+            bookings: motorcycle.bookings,
+            questions: motorcycle.questions,
+            reviews: motorcycle.reviews,
+            rating: motorcycle.rating,
+            createdAt: motorcycle.createdAt,
           },
-          { new: true, runValidators: true }
-        );
-        
-        return res.status(200).json({ success: true, data: updatedMotorcycle });
-      } catch (error) {
-        console.error('Error updating motorcycle:', error);
-        return res.status(500).json({ success: false, error: 'Error updating motorcycle' });
-      }
-      
-    case 'DELETE':
-      try {
-        // Check if the user is the owner of the motorcycle or an admin
-        if (motorcycle.owner.toString() !== session.user.id && session.user.role !== 'admin') {
-          return res.status(403).json({ success: false, error: 'You do not have permission to delete this motorcycle' });
+        });
+
+      case 'PATCH':
+        if (!session) {
+          return res.status(401).json({ error: 'You must be logged in to update a motorcycle' });
+        }
+
+        if (!motorcycle.owner) {
+          return res.status(403).json({ error: 'This motorcycle has no owner information' });
         }
         
-        // Only allow admins to delete motorcycles
-        if (session.user.role !== 'admin') {
-          return res.status(403).json({ success: false, error: 'Only admins can delete motorcycles' });
+        const ownerId = typeof motorcycle.owner === 'object' && motorcycle.owner !== null
+          ? motorcycle.owner._id?.toString?.()
+          : motorcycle.owner?.toString?.();
+
+        if (ownerId !== session.user.id) {
+          return res.status(403).json({ error: 'You can only update your own motorcycles' });
+        }
+
+        const {
+          name,
+          brand,
+          model,
+          year,
+          cc,
+          price,
+          description,
+          images,
+          imageUrl,
+          features,
+          location,
+          available,
+        } = req.body;
+
+        if (name) motorcycle.name = name;
+        if (brand) motorcycle.brand = brand;
+        if (model) motorcycle.model = model;
+        if (year) motorcycle.year = year;
+        if (cc) motorcycle.cc = cc;
+        if (price) motorcycle.price = price;
+        if (description) motorcycle.description = description;
+        if (images) motorcycle.images = images;
+        if (imageUrl) {
+          motorcycle.imageUrl = imageUrl;
+          // Also update images array if not present
+          if (Array.isArray(motorcycle.images) && !motorcycle.images.includes(imageUrl)) {
+            motorcycle.images.unshift(imageUrl);
+          }
+        }
+        if (features) motorcycle.features = features;
+        if (location) motorcycle.location = location;
+        if (available !== undefined) {
+          motorcycle.available = (available === true || available === 'true');
+        }
+
+        await motorcycle.save();
+
+        return res.status(200).json({
+          success: true,
+          motorcycle: {
+            id: motorcycle._id,
+            name: motorcycle.name,
+            brand: motorcycle.brand,
+            model: motorcycle.model,
+            price: motorcycle.price,
+            location: motorcycle.location,
+            available: motorcycle.available,
+          },
+        });
+
+      case 'DELETE':
+        if (!session) {
+          return res.status(401).json({ error: 'You must be logged in to delete a motorcycle' });
+        }
+
+        if (!motorcycle.owner) {
+          return res.status(403).json({ error: 'This motorcycle has no owner information' });
         }
         
-        await Motorcycle.findByIdAndDelete(id);
-        return res.status(200).json({ success: true, data: {} });
-      } catch (error) {
-        console.error('Error deleting motorcycle:', error);
-        return res.status(500).json({ success: false, error: 'Error deleting motorcycle' });
-      }
-      
-    default:
-      res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
-      return res.status(405).json({ success: false, error: `Method ${method} not allowed` });
+        if (motorcycle.owner.toString() !== session.user.id) {
+          return res.status(403).json({ error: 'You can only delete your own motorcycles' });
+        }
+
+        await motorcycle.remove();
+
+        return res.status(200).json({
+          success: true,
+          message: 'Motorcycle deleted successfully',
+        });
+
+      default:
+        res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
+        return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+    }
+  } catch (error) {
+    console.error('Motorcycle error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 } 

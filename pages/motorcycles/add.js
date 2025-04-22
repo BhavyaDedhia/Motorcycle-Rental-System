@@ -23,10 +23,16 @@ export default function AddMotorcycle() {
     cc: '',
     price: '',
     description: '',
-    imageUrl: '',
     location: '',
+    features: [],
     available: true
   });
+  const [featureInput, setFeatureInput] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [additionalImageFiles, setAdditionalImageFiles] = useState([]);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [additionalImagePreviews, setAdditionalImagePreviews] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -61,68 +67,42 @@ export default function AddMotorcycle() {
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return;
+    if (file) {
+      setImageFile(file);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB');
-      return;
-    }
-
-    // Create a preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewImage(reader.result);
-    };
-    reader.readAsDataURL(file);
-
-    // Upload the image
-    uploadImage(file);
   };
 
-  const uploadImage = async (file) => {
-    setUploading(true);
-    
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
+  const handleAdditionalImagesChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setAdditionalImageFiles([...additionalImageFiles, ...files]);
       
-      const response = await axios.post('/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // Generate previews for all new files
+      const newPreviews = files.map(file => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result);
+          };
+          reader.readAsDataURL(file);
+        });
       });
       
-      // Log the response to see what's being returned
-      console.log('Upload response:', response.data);
-      
-      // Make sure we're using the correct property from the response
-      const imageUrl = response.data.imageUrl;
-      
-      if (!imageUrl) {
-        throw new Error('No image URL returned from server');
-      }
-      
-      // Update the form data with the image URL
-      setFormData(prevData => ({
-        ...prevData,
-        imageUrl: imageUrl
-      }));
-      
-      toast.success('Image uploaded successfully');
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast.error(error.response?.data?.error || 'Failed to upload image');
-      setPreviewImage(null);
-    } finally {
-      setUploading(false);
+      Promise.all(newPreviews).then(previews => {
+        setAdditionalImagePreviews([...additionalImagePreviews, ...previews]);
+      });
     }
+  };
+
+  const removeAdditionalImage = (index) => {
+    setAdditionalImageFiles(additionalImageFiles.filter((_, i) => i !== index));
+    setAdditionalImagePreviews(additionalImagePreviews.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -146,69 +126,47 @@ export default function AddMotorcycle() {
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
     
     try {
-      // Create a properly formatted data object
-      const motorcycleData = {
-        name: formData.name,
-        brand: formData.brand,
-        model: formData.model,
-        year: Number(formData.year),
-        cc: Number(formData.cc),
-        price: Number(formData.price),
-        description: formData.description,
-        imageUrl: formData.imageUrl || '/images/motorcycle-placeholder.jpg',
-        location: formData.location,
+      // Upload main image if selected
+      let mainImageUrl = '';
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+        const uploadRes = await axios.post('/api/upload', formData);
+        mainImageUrl = uploadRes.data.fileUrl;
+      }
+      
+      // Upload additional images if selected
+      let additionalImageUrls = [];
+      if (additionalImageFiles.length > 0) {
+        // Upload each image one by one
+        const uploadPromises = additionalImageFiles.map(file => {
+          const formData = new FormData();
+          formData.append('file', file);
+          return axios.post('/api/upload', formData);
+        });
+        
+        const uploadResults = await Promise.all(uploadPromises);
+        additionalImageUrls = uploadResults.map(res => res.data.fileUrl);
+      }
+      
+      // Create motorcycle with images
+      const response = await axios.post('/api/motorcycles', {
+        ...formData,
+        images: [mainImageUrl, ...additionalImageUrls].filter(Boolean),
         features: filteredFeatures,
         available: formData.available
-      };
+      });
       
-      // Log the data being sent to help with debugging
-      console.log('Submitting motorcycle data:', motorcycleData);
-      
-      // Log each field individually to check for issues
-      console.log('Name:', motorcycleData.name);
-      console.log('Brand:', motorcycleData.brand);
-      console.log('Model:', motorcycleData.model);
-      console.log('Year:', motorcycleData.year, typeof motorcycleData.year);
-      console.log('CC:', motorcycleData.cc, typeof motorcycleData.cc);
-      console.log('Price:', motorcycleData.price, typeof motorcycleData.price);
-      console.log('Description:', motorcycleData.description);
-      console.log('Image URL:', motorcycleData.imageUrl);
-      console.log('Location:', motorcycleData.location);
-      console.log('Features:', motorcycleData.features);
-      
-      const response = await axios.post('/api/motorcycles', motorcycleData);
-      
-      toast.success('Motorcycle added successfully!');
-      router.push('/motorcycles');
+      toast.success('Motorcycle listed successfully!');
+      router.push('/dashboard?tab=my-vehicles');
     } catch (error) {
-      console.error('Error adding motorcycle:', error);
-      if (error.response?.status === 401) {
-        toast.error('You must be logged in to add a motorcycle');
-        setTimeout(() => {
-          router.push('/login?redirect=/motorcycles/add');
-        }, 2000);
-      } else if (error.response?.status === 400) {
-        const errorMessage = error.response.data.error || 'Please check all required fields';
-        const missingFields = error.response.data.missingFields;
-        
-        if (missingFields) {
-          const missingFieldNames = Object.entries(missingFields)
-            .filter(([_, isMissing]) => isMissing)
-            .map(([field]) => field)
-            .join(', ');
-          
-          toast.error(`Missing required fields: ${missingFieldNames}`);
-        } else {
-          toast.error(errorMessage);
-        }
-      } else {
-        toast.error('Failed to add motorcycle. Please try again.');
-      }
+      console.error('Error creating motorcycle:', error);
+      toast.error('Failed to create listing');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -347,63 +305,56 @@ export default function AddMotorcycle() {
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Motorcycle Image*
+                <div className="col-span-1 md:col-span-2">
+                  <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-1">
+                    Main Image
                   </label>
-                  <div className="mt-1 flex items-center">
-                    <div className="w-full">
-                      <div className="flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                        <div className="space-y-1 text-center">
-                          {previewImage ? (
-                            <div className="relative h-40 w-full mb-4">
-                              <Image 
-                                src={previewImage} 
-                                alt="Preview" 
-                                layout="fill" 
-                                objectFit="contain"
-                              />
-                            </div>
-                          ) : (
-                            <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                          <div className="flex text-sm text-gray-600">
-                            <label
-                              htmlFor="image-upload"
-                              className="relative cursor-pointer bg-white rounded-md font-medium text-yellow-600 hover:text-yellow-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-yellow-500"
-                            >
-                              <span>{previewImage ? 'Change image' : 'Upload an image'}</span>
-                              <input
-                                id="image-upload"
-                                name="image"
-                                type="file"
-                                className="sr-only"
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                ref={fileInputRef}
-                              />
-                            </label>
-                            <p className="pl-1">or drag and drop</p>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            PNG, JPG, GIF up to 5MB
-                          </p>
-                        </div>
-                      </div>
-                      {uploading && (
-                        <div className="mt-2 text-sm text-gray-500">
-                          Uploading image...
-                        </div>
-                      )}
-                      {formData.imageUrl && !previewImage && (
-                        <div className="mt-2 text-sm text-gray-500">
-                          Image uploaded: {formData.imageUrl}
-                        </div>
-                      )}
+                  <input
+                    type="file"
+                    id="image"
+                    name="image"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                  />
+                  {imagePreview && (
+                    <div className="mt-2">
+                      <img src={imagePreview} alt="Preview" className="w-40 h-40 object-cover rounded-md" />
                     </div>
-                  </div>
+                  )}
+                </div>
+
+                <div className="col-span-1 md:col-span-2">
+                  <label htmlFor="additionalImages" className="block text-sm font-medium text-gray-700 mb-1">
+                    Additional Images (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    id="additionalImages"
+                    name="additionalImages"
+                    accept="image/*"
+                    multiple
+                    onChange={handleAdditionalImagesChange}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                  />
+                  {additionalImagePreviews.length > 0 && (
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {additionalImagePreviews.map((preview, index) => (
+                        <div key={index} className="relative">
+                          <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-28 object-cover rounded-md" />
+                          <button
+                            type="button"
+                            onClick={() => removeAdditionalImage(index)}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition duration-300"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -481,12 +432,12 @@ export default function AddMotorcycle() {
               <div className="pt-4">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={isSubmitting}
                   className={`w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                    loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500'
+                    isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500'
                   }`}
                 >
-                  {loading ? 'Adding Motorcycle...' : 'List Your Motorcycle'}
+                  {isSubmitting ? 'Listing Motorcycle...' : 'List Your Motorcycle'}
                 </button>
               </div>
             </form>

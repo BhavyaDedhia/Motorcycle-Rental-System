@@ -54,15 +54,37 @@ export default async function handler(req, res) {
 
     // Get the uploaded file - check if it's a single file or an array
     let file;
-    if (files.image) {
-      if (Array.isArray(files.image)) {
-        file = files.image[0];
-      } else {
-        file = files.image;
+    
+    // Check all possible file field names
+    const possibleFieldNames = ['image', 'file', 'upload'];
+    
+    // Find the first field that has a file
+    for (const fieldName of possibleFieldNames) {
+      if (files[fieldName]) {
+        if (Array.isArray(files[fieldName])) {
+          file = files[fieldName][0];
+        } else {
+          file = files[fieldName];
+        }
+        break;
+      }
+    }
+    
+    // If no file was found in the standard fields, check if there's any file at all
+    if (!file) {
+      const fileKeys = Object.keys(files);
+      if (fileKeys.length > 0) {
+        const firstKey = fileKeys[0];
+        if (Array.isArray(files[firstKey])) {
+          file = files[firstKey][0];
+        } else {
+          file = files[firstKey];
+        }
       }
     }
     
     if (!file) {
+      console.error('No file found in upload request. Files object:', files);
       return res.status(400).json({ error: 'No image file uploaded' });
     }
 
@@ -87,7 +109,11 @@ export default async function handler(req, res) {
     // Return the URL of the uploaded image
     const imageUrl = `/uploads/${newFilename}`;
     console.log('Returning image URL:', imageUrl);
-    return res.status(200).json({ imageUrl });
+    return res.status(200).json({ 
+      success: true,
+      fileUrl: imageUrl,  // This is the format expected by the frontend
+      imageUrl: imageUrl  // Adding this for backward compatibility
+    });
     
   } catch (error) {
     console.error('Error uploading image:', error);

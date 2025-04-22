@@ -45,10 +45,17 @@ export default function EditMotorcycle() {
       try {
         setLoading(true);
         const response = await axios.get(`/api/motorcycles/${id}`);
-        const motorcycle = response.data.data;
+        const motorcycle = response.data.motorcycle;
+        
+        // Defensive check for motorcycle and owner
+        if (!motorcycle || !motorcycle.owner || !motorcycle.owner.id) {
+          toast.error('Unable to load motorcycle or owner information');
+          router.push('/dashboard');
+          return;
+        }
         
         // Check if user owns this motorcycle
-        if (motorcycle.owner !== session?.user?.id) {
+        if (motorcycle.owner.id !== session?.user?.id) {
           toast.error('You do not have permission to edit this motorcycle');
           router.push('/dashboard');
           return;
@@ -95,11 +102,19 @@ export default function EditMotorcycle() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value
-    });
+    if (name === 'available') {
+      setFormData({
+        ...formData,
+        available: !!checked
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
   };
+
 
   const handleFeatureChange = (index, value) => {
     const updatedFeatures = [...features];
@@ -117,23 +132,32 @@ export default function EditMotorcycle() {
     setFeatures(updatedFeatures);
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    // For now, we'll just use a URL input instead of file upload
-    // In a real app, you would upload the file to a storage service
-    setFormData({
-      ...formData,
-      imageUrl: file.name
-    });
-    
-    // Create a preview URL
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewImage(reader.result);
-    };
-    reader.readAsDataURL(file);
+
+    setUploading(true);
+    try {
+      // Upload image to /api/upload
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      const uploadRes = await axios.post('/api/upload', formDataUpload, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const uploadedUrl = uploadRes.data.fileUrl;
+      setFormData({
+        ...formData,
+        imageUrl: uploadedUrl
+      });
+      // Show preview
+      const reader = new FileReader();
+      reader.onloadend = () => setPreviewImage(reader.result);
+      reader.readAsDataURL(file);
+    } catch (err) {
+      toast.error('Image upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -169,7 +193,7 @@ export default function EditMotorcycle() {
         imageUrl: formData.imageUrl || '/images/motorcycle-placeholder.jpg',
         location: formData.location,
         features: filteredFeatures,
-        available: formData.available
+        available: Boolean(formData.available)
       };
       
       // Update the motorcycle
@@ -225,6 +249,8 @@ export default function EditMotorcycle() {
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* All form fields here */}
+              </div>
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                     Motorcycle Name*
@@ -342,51 +368,41 @@ export default function EditMotorcycle() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Motorcycle Image
-                  </label>
-                  <div className="w-full">
-                    <div className="flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                      <div className="space-y-1 text-center">
-                        {previewImage ? (
-                          <div className="relative h-40 w-full mb-4">
-                            <Image 
-                              src={previewImage} 
-                              alt="Preview" 
-                              layout="fill" 
-                              objectFit="contain"
-                            />
-                          </div>
-                        ) : (
-                          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                        <div className="flex text-sm text-gray-600">
-                          <label
-                            htmlFor="file-upload"
-                            className="relative cursor-pointer bg-white rounded-md font-medium text-yellow-600 hover:text-yellow-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-yellow-500"
-                          >
-                            <span>Upload a file</span>
-                            <input 
-                              id="file-upload" 
-                              name="file-upload" 
-                              type="file" 
-                              className="sr-only" 
-                              onChange={handleImageChange}
-                              ref={fileInputRef}
-                            />
-                          </label>
-                          <p className="pl-1">or drag and drop</p>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          PNG, JPG, GIF up to 10MB
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Motorcycle Image
+  </label>
+  <div className="w-full">
+    <div className="flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+      <div className="space-y-1 text-center">
+        <Image
+          src={previewImage || formData.imageUrl || '/images/motorcycle-placeholder.jpg'}
+          alt="Motorcycle preview"
+          width={320}
+          height={200}
+          style={{ objectFit: 'contain', borderRadius: '8px' }}
+        />
+        <div className="flex text-sm text-gray-600 justify-center mt-2">
+          <label
+            htmlFor="file-upload"
+            className="relative cursor-pointer bg-white rounded-md font-medium text-yellow-600 hover:text-yellow-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-yellow-500"
+          >
+            <span>Upload a file</span>
+            <input
+              id="file-upload"
+              name="file-upload"
+              type="file"
+              className="sr-only"
+              onChange={handleImageChange}
+              ref={fileInputRef}
+            />
+          </label>
+          <p className="pl-1">or drag and drop</p>
+        </div>
+        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+      </div>
+    </div>
+  </div>
+</div>
               
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">

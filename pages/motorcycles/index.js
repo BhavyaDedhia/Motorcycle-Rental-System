@@ -33,17 +33,22 @@ export default function Motorcycles() {
         const response = await axios.get('/api/motorcycles');
         
         // If no motorcycles in DB yet, use static data
-        if (response.data.length === 0) {
+        if (!response.data.data || response.data.data.length === 0) {
           setMotorcycles(staticMotorcycles);
           setFilteredMotorcycles(staticMotorcycles.filter(m => m.available));
         } else {
           // Filter out user's own motorcycles if logged in
-          let filteredData = response.data;
+          let filteredData = response.data.data;
           if (status === 'authenticated') {
             // Convert owner ID to string for comparison
-            filteredData = response.data.filter(m => {
+            filteredData = response.data.data.filter(m => {
+              // Skip this motorcycle if owner is null or undefined
+              if (!m.owner) {
+                return true; // Include motorcycles with no owner information
+              }
+              
               // Check if owner is an object (populated) or just an ID
-              const ownerId = typeof m.owner === 'object' ? m.owner._id : m.owner;
+              const ownerId = typeof m.owner === 'object' ? (m.owner?._id || '') : m.owner;
               return ownerId !== session.user.id;
             });
           }

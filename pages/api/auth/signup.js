@@ -18,9 +18,9 @@ export default async function handler(req, res) {
   try {
     await connectToDatabase();
 
-    const { username, email, password } = req.body;
+    const { username, email, password, role } = req.body;
 
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !role) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "User already exists" });
     }
 
-    const newUser = new User({ name: username, email, password });
+    const newUser = new User({ name: username, email, password, role });
 
     await newUser.save();
     res.status(201).json({ message: "User registered successfully" });

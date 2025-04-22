@@ -37,15 +37,50 @@ export default function BookingCard({ booking }) {
       <div className="p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row">
           <div className="relative h-40 w-full sm:w-48 sm:h-32 flex-shrink-0 mb-4 sm:mb-0 bg-gray-200 rounded-md">
-            <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-              <span>Motorcycle Image</span>
-            </div>
+            {/* Motorcycle Image Display Logic */}
+            {(() => {
+              let displayImage = null;
+              if (Array.isArray(motorcycle?.images) && motorcycle.images.length > 0) {
+                const validImages = motorcycle.images.filter(img => typeof img === 'string' && (img.startsWith('/') || img.startsWith('http') || img.startsWith('data:')));
+                if (validImages.length > 0) {
+                  displayImage = validImages[0];
+                }
+              }
+              if (!displayImage && motorcycle?.imageUrl && typeof motorcycle.imageUrl === 'string') {
+                displayImage = motorcycle.imageUrl;
+              }
+              if (displayImage) {
+                return (
+                  <img
+                    src={displayImage}
+                    alt={motorcycle?.name || 'Motorcycle'}
+                    className="object-cover w-full h-full rounded-md"
+                    onError={e => { e.target.onerror = null; e.target.src = '/placeholder.png'; }}
+                  />
+                );
+              } else {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                    <span>No Image</span>
+                  </div>
+                );
+              }
+            })()}
           </div>
           
           <div className="sm:ml-6 flex-1">
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">{motorcycle?.name || 'Motorcycle'}</h3>
+                <div className="w-20 h-20 relative rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                  <Image
+                    src={typeof motorcycle.imageUrl === 'string' && (motorcycle.imageUrl.startsWith('/') || motorcycle.imageUrl.startsWith('http') || motorcycle.imageUrl.startsWith('data:')) ? motorcycle.imageUrl : '/images/motorcycle-placeholder.jpg'}
+                    alt={motorcycle.name}
+                    fill
+                    style={{ objectFit: 'cover' }}
+                    className="rounded-lg"
+                  />
+                </div>
                 <p className="text-sm text-gray-600">
                   {motorcycle?.brand} {motorcycle?.model} • {motorcycle?.year}
                 </p>
@@ -66,12 +101,12 @@ export default function BookingCard({ booking }) {
               
               <div>
                 <p className="text-sm text-gray-500">Total Price</p>
-                <p className="text-sm font-medium text-gray-900">${booking.totalPrice.toFixed(2)}</p>
+                <p className="text-sm font-medium text-gray-900">₹{booking.totalPrice.toFixed(2)}</p>
               </div>
               
               <div>
                 <p className="text-sm text-gray-500">Payment Status</p>
-                <p className={`text-sm font-medium ${
+                <p className={`text-sm font-medium ₹{
                   booking.paymentStatus === 'paid' 
                     ? 'text-green-600' 
                     : booking.paymentStatus === 'refunded' 

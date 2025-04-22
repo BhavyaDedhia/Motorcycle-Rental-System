@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import Booking from '../../../models/Booking';
 import Motorcycle from '../../../models/Motorcycle';
+import Question from '../../../models/Question';
 
 export default async function handler(req, res) {
   const { method } = req;

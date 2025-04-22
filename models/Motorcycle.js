@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import Booking from './Booking';
+import Review from './Review';
 
 const motorcycleSchema = new mongoose.Schema({
   name: {
@@ -33,9 +35,24 @@ const motorcycleSchema = new mongoose.Schema({
     required: [true, 'Please provide a description'],
     trim: true,
   },
-  imageUrl: {
-    type: String,
-    default: '/images/motorcycle-placeholder.jpg',
+  images: {
+    type: [String],
+    required: [true, 'Please provide at least one image'],
+    validate: {
+      validator: function(v) {
+        if (!Array.isArray(v)) return false;
+        if (v.length === 0) return false;
+        return v.every(url => typeof url === 'string' && url.trim().length > 0);
+      },
+      message: 'Please provide at least one valid image URL'
+    },
+    set: function(v) {
+      // Filter out any invalid or empty URLs
+      if (Array.isArray(v)) {
+        return v.filter(url => typeof url === 'string' && url.trim().length > 0);
+      }
+      return v;
+    }
   },
   available: {
     type: Boolean,
@@ -55,10 +72,30 @@ const motorcycleSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'Motorcycle must belong to a user'],
   },
+  bookings: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Booking',
+    default: []
+  }],
+  questions: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Question'
+  }],
+  rating: {
+    type: Number,
+    min: 0,
+    max: 5,
+    default: 0
+  },
+  reviews: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Review',
+    default: []
+  }],
   createdAt: {
     type: Date,
     default: Date.now,
   },
-});
+}, { strictPopulate: false });
 
 export default mongoose.models.Motorcycle || mongoose.model('Motorcycle', motorcycleSchema); 

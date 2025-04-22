@@ -15,7 +15,12 @@ export default function BookingDetail() {
   const [cancelLoading, setCancelLoading] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    // Defensive: Only fetch if id is a valid 24-char hex string
+    if (!id || typeof id !== 'string' || id.length !== 24 || !/^[a-fA-F0-9]{24}$/.test(id)) {
+      setLoading(false);
+      setBooking(null);
+      return;
+    }
 
     const fetchBooking = async () => {
       try {
@@ -40,20 +45,19 @@ export default function BookingDetail() {
     setCancelLoading(true);
     
     try {
-      const response = await axios.post(`/api/bookings/${id}/cancel`);
-      
-      if (response.data.success) {
-        toast.success('Booking cancelled successfully');
-        setBooking({
-          ...booking,
-          status: 'cancelled'
-        });
-      } else {
-        toast.error(response.data.message || 'Failed to cancel booking');
-      }
+      const response = await axios.patch(`/api/bookings/${id}`, {
+        status: 'cancelled',
+        cancellationReason: 'User cancelled',
+      });
+      toast.success('Booking cancelled successfully');
+      setBooking({
+        ...booking,
+        status: 'cancelled',
+        cancellationReason: 'User cancelled',
+      });
     } catch (error) {
       console.error('Error cancelling booking:', error);
-      toast.error(error.response?.data?.message || 'Failed to cancel booking');
+      toast.error(error.response?.data?.error || 'Failed to cancel booking');
     } finally {
       setCancelLoading(false);
     }

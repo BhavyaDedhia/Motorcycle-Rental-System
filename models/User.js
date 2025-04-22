@@ -26,8 +26,24 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
-    default: 'user',
+    enum: ['owner', 'renter'],
+    required: [true, 'Please select a role'],
+  },
+  phone: {
+    type: String,
+    trim: true,
+  },
+  location: {
+    type: String,
+    trim: true,
+  },
+  profileImage: {
+    type: String,
+    default: '/images/default-profile.jpg',
+  },
+  isVerified: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

@@ -6,7 +6,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <link rel="icon" href="/favicon.ico" />
-        <meta name="description" content="MotoCruise - Premium Motorcycle Rental Service" />
+        <meta name="description" content="MotoRent - Premium Motorcycle Rental Service" />
       </Head>
       <body>
         <Main />

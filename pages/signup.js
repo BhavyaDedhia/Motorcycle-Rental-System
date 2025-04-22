@@ -15,7 +15,8 @@ export default function Signup() {
     username: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    role: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -37,10 +38,10 @@ export default function Signup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const { username, email, password, confirmPassword } = formData;
+    const { username, email, password, confirmPassword, role } = formData;
     
     // Validation
-    if (!username || !email || !password || !confirmPassword) {
+    if (!username || !email || !password || !confirmPassword || !role) {
       toast.error('Please fill in all fields');
       return;
     }
@@ -62,7 +63,8 @@ export default function Signup() {
       await axios.post('/api/auth/signup', {
         username,
         email,
-        password
+        password,
+        role
       });
       
       toast.success('Account created successfully!');
@@ -166,9 +168,24 @@ export default function Signup() {
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm"
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm"
                   placeholder="Confirm Password"
                 />
+              </div>
+              <div>
+                <label htmlFor="role" className="sr-only">Role</label>
+                <select
+                  id="role"
+                  name="role"
+                  required
+                  value={formData.role}
+                  onChange={handleChange}
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm"
+                >
+                  <option value="">Select a role</option>
+                  <option value="owner">Owner</option>
+                  <option value="renter">Renter</option>
+                </select>
               </div>
             </div>
 

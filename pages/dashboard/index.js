@@ -7,6 +7,7 @@ import Layout from '../../components/Layout';
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
+import DashboardQuestions from '../../components/DashboardQuestions';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -14,7 +15,7 @@ export default function Dashboard() {
   const [myMotorcycles, setMyMotorcycles] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('my-vehicles'); // my-vehicles, bookings, profile
+  const [activeTab, setActiveTab] = useState('my-vehicles'); // my-vehicles, bookings, profile, questions
 
   const handleTabChange = (tab) => {
     console.log(`Changing tab to: ${tab}`);
@@ -34,7 +35,7 @@ export default function Dashboard() {
   useEffect(() => {
     // Handle tab from URL query parameter
     if (router.query.tab) {
-      const validTabs = ['my-vehicles', 'bookings', 'profile'];
+      const validTabs = ['my-vehicles', 'bookings', 'profile', 'questions'];
       if (validTabs.includes(router.query.tab)) {
         console.log(`Setting tab from URL: ${router.query.tab}`);
         setActiveTab(router.query.tab);
@@ -64,19 +65,9 @@ export default function Dashboard() {
       const motorcyclesResponse = await axios.get('/api/motorcycles/my-listings');
       setMyMotorcycles(motorcyclesResponse.data);
       
-      // Fetch bookings for user's motorcycles
-      const bookingsResponse = await axios.get('/api/bookings/my-vehicles');
-      
-      // Fetch bookings made by the user
-      const userBookingsResponse = await axios.get('/api/bookings');
-      
-      // Combine both types of bookings
-      const allBookings = [...bookingsResponse.data, ...userBookingsResponse.data];
-      
-      // Sort by creation date (newest first)
-      allBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      
-      setMyBookings(allBookings);
+      // Fetch bookings for motorcycles owned by the user (i.e., orders received as an owner)
+      const ordersResponse = await axios.get('/api/bookings/my-vehicles');
+      setMyBookings(ordersResponse.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('Failed to load dashboard data');
@@ -148,8 +139,8 @@ export default function Dashboard() {
                     </div>
                   </a>
                   
-                  <a
-                    href="/dashboard?tab=bookings"
+                  <button
+                    onClick={() => setActiveTab('bookings')}
                     className={`block w-full px-4 py-2 text-sm font-medium rounded-md ${
                       activeTab === 'bookings'
                         ? 'bg-yellow-100 text-yellow-700'
@@ -160,12 +151,28 @@ export default function Dashboard() {
                       <svg className="mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      Bookings
+                      Orders
                     </div>
-                  </a>
+                  </button>
                   
-                  <a
-                    href="/dashboard?tab=profile"
+                  <button
+                    onClick={() => setActiveTab('questions')}
+                    className={`block w-full px-4 py-2 text-sm font-medium rounded-md ${
+                      activeTab === 'questions'
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <svg className="mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Q&A
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setActiveTab('profile')}
                     className={`block w-full px-4 py-2 text-sm font-medium rounded-md ${
                       activeTab === 'profile'
                         ? 'bg-yellow-100 text-yellow-700'
@@ -178,7 +185,7 @@ export default function Dashboard() {
                       </svg>
                       Profile
                     </div>
-                  </a>
+                  </button>
                 </nav>
                 
                 <div className="mt-6 pt-4 border-t border-gray-200 space-y-4">
@@ -239,18 +246,19 @@ export default function Dashboard() {
                       {myMotorcycles.map((motorcycle) => (
                         <div key={motorcycle._id} className="bg-white rounded-lg shadow-md overflow-hidden">
                           <div className="relative h-48 bg-gray-200">
-                            {motorcycle.imageUrl ? (
-                              <Image 
-                                src={motorcycle.imageUrl} 
-                                alt={motorcycle.name}
-                                layout="fill"
-                                objectFit="cover"
-                              />
-                            ) : (
-                              <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                                <span>No Image</span>
-                              </div>
-                            )}
+                            <Image
+                              src={
+                                Array.isArray(motorcycle.images) && typeof motorcycle.images[0] === 'string' && (motorcycle.images[0].startsWith('/') || motorcycle.images[0].startsWith('http') || motorcycle.images[0].startsWith('data:'))
+                                  ? motorcycle.images[0]
+                                  : (typeof motorcycle.imageUrl === 'string' && (motorcycle.imageUrl.startsWith('/') || motorcycle.imageUrl.startsWith('http') || motorcycle.imageUrl.startsWith('data:'))
+                                    ? motorcycle.imageUrl
+                                    : '/images/motorcycle-placeholder.jpg')
+                              }
+                              alt={motorcycle.name}
+                              fill
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              style={{ objectFit: 'cover' }}
+                            />
                             <div className="absolute top-2 right-2">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 motorcycle.available 
@@ -316,18 +324,35 @@ export default function Dashboard() {
                           <div className="p-4 sm:p-6">
                             <div className="flex flex-col sm:flex-row">
                               <div className="relative h-32 w-full sm:w-40 flex-shrink-0 mb-4 sm:mb-0 bg-gray-200 rounded-md">
-                                {booking.motorcycle?.imageUrl ? (
-                                  <Image 
-                                    src={booking.motorcycle.imageUrl} 
-                                    alt={booking.motorcycle.name}
-                                    layout="fill"
-                                    objectFit="cover"
-                                  />
-                                ) : (
-                                  <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                                    <span>No Image</span>
-                                  </div>
-                                )}
+                                {(() => {
+  let displayImage = null;
+  if (Array.isArray(booking.motorcycle?.images) && booking.motorcycle.images.length > 0) {
+    const validImages = booking.motorcycle.images.filter(img => typeof img === 'string' && (img.startsWith('/') || img.startsWith('http') || img.startsWith('data:')));
+    if (validImages.length > 0) {
+      displayImage = validImages[0];
+    }
+  }
+  if (!displayImage && booking.motorcycle?.imageUrl && typeof booking.motorcycle.imageUrl === 'string') {
+    displayImage = booking.motorcycle.imageUrl;
+  }
+  if (displayImage) {
+    return (
+      <Image
+        src={displayImage}
+        alt={booking.motorcycle?.name || 'Motorcycle'}
+        layout="fill"
+        objectFit="cover"
+        onError={e => { e.target.onerror = null; e.target.src = '/placeholder.png'; }}
+      />
+    );
+  } else {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+        <span>No Image</span>
+      </div>
+    );
+  }
+})()}
                               </div>
                               
                               <div className="sm:ml-6 flex-1">
@@ -408,6 +433,13 @@ export default function Dashboard() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+              
+              {/* Questions Tab */}
+              {activeTab === 'questions' && (
+                <div>
+                  <DashboardQuestions myMotorcycles={myMotorcycles} />
                 </div>
               )}
               
@@ -494,18 +526,13 @@ export default function Dashboard() {
                               <div key={motorcycle._id} className="bg-gray-50 rounded-lg p-4">
                                 <div className="flex items-start space-x-4">
                                   <div className="relative h-20 w-20 flex-shrink-0 bg-gray-200 rounded-md overflow-hidden">
-                                    {motorcycle.imageUrl ? (
-                                      <Image 
-                                        src={motorcycle.imageUrl} 
-                                        alt={motorcycle.name}
-                                        layout="fill"
-                                        objectFit="cover"
-                                      />
-                                    ) : (
-                                      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                                        <span>No Image</span>
-                                      </div>
-                                    )}
+                                    <Image
+                                      src={motorcycle.images[0] || '/images/motorcycle-placeholder.jpg'}
+                                      alt={motorcycle.name}
+                                      fill
+                                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                      style={{ objectFit: 'cover' }}
+                                    />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <h4 className="text-sm font-medium text-gray-900 truncate">{motorcycle.name}</h4>

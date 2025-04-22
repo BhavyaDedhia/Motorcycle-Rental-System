@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
@@ -23,6 +24,10 @@ export default function MotorcycleDetail() {
   const [endDate, setEndDate] = useState('');
   const [totalPrice, setTotalPrice] = useState(0);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [newQuestion, setNewQuestion] = useState('');
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -32,9 +37,52 @@ export default function MotorcycleDetail() {
         setLoading(true);
         const response = await axios.get(`/api/motorcycles/${id}`);
         
-        if (response.data && response.data.data) {
-          setMotorcycle(response.data.data);
+        if (response.data && response.data.success && response.data.motorcycle) {
+          // Process the motorcycle data
+          const motoData = {...response.data.motorcycle};
+          
+          // Log the motorcycle data to debug image issues
+          console.log('Motorcycle data received:', motoData);
+          
+          // Ensure images array is valid
+          if (!motoData.images || !Array.isArray(motoData.images)) {
+            console.warn('Images array is invalid, setting to empty array');
+            motoData.images = [];
+          }
+          
+          // Check if we have an imageUrl property (used by MotorcycleCard)
+          if (motoData.imageUrl && typeof motoData.imageUrl === 'string' && motoData.imageUrl.length > 0) {
+            console.log('Found imageUrl property:', motoData.imageUrl);
+            
+            // Add the imageUrl to the images array if it's not already there
+            if (!motoData.images.includes(motoData.imageUrl)) {
+              motoData.images.unshift(motoData.imageUrl); // Add to beginning of array
+            }
+          }
+          
+          console.log('Images array after adding imageUrl:', motoData.images);
+          
+          // Filter out invalid image URLs
+          motoData.images = motoData.images.filter(img => {
+            if (!img || typeof img !== 'string') {
+              return false;
+            }
+            // Keep only URLs that are likely to be valid
+            return img.startsWith('http') || img.startsWith('/') || img.startsWith('data:');
+          });
+          
+          console.log('Final filtered images array:', motoData.images);
+
+          // Log which image will be rendered
+          if (motoData.images.length > 0) {
+            console.log('Will attempt to render image:', motoData.images[0]);
+          } else {
+            console.warn('No images to render, will use placeholder');
+          }
+          
+          setMotorcycle(motoData);
         } else {
+          console.warn('API returned invalid data, falling back to static data');
           // Fallback to static data if API fails
           const foundMotorcycle = motorcycles.find(m => m._id === id);
           setMotorcycle(foundMotorcycle || null);
@@ -68,6 +116,25 @@ export default function MotorcycleDetail() {
       setTotalPrice(0);
     }
   }, [startDate, endDate, motorcycle]);
+
+  // Fetch questions for this motorcycle
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchQuestions = async () => {
+      setIsLoadingQuestions(true);
+      try {
+        const response = await axios.get(`/api/questions?motorcycleId=${id}`);
+        setQuestions(Array.isArray(response.data.questions) ? response.data.questions : []);
+      } catch (error) {
+        console.error('Error fetching questions:', error);
+      } finally {
+        setIsLoadingQuestions(false);
+      }
+    };
+
+    fetchQuestions();
+  }, [id]);
 
   const handleStartDateChange = (e) => {
     setStartDate(e.target.value);
@@ -117,18 +184,7 @@ export default function MotorcycleDetail() {
       const formattedStartDate = start.toISOString();
       const formattedEndDate = end.toISOString();
       
-      // Log the booking data for debugging
-      console.log('Booking data:', {
-        motorcycleId: id,
-        startDate: formattedStartDate,
-        endDate: formattedEndDate,
-        totalPrice: totalPrice
-      });
-      
-      // Log the session for debugging
-      console.log('Session:', session);
-      
-      // Make actual API call to create booking
+      // Make API call to create booking
       const response = await axios.post('/api/bookings', {
         motorcycleId: id,
         startDate: formattedStartDate,
@@ -136,25 +192,52 @@ export default function MotorcycleDetail() {
         totalPrice: totalPrice
       });
       
-      console.log('Booking response:', response.data);
-      toast.success('Booking created successfully!');
-      router.push('/bookings');
+      toast.success('Booking created! Proceed to payment.');
+      // Redirect to payment page instead of bookings list
+      router.push(`/bookings/payment?bookingId=${response.data._id}`);
     } catch (error) {
       console.error('Error creating booking:', error);
-      if (error.response) {
-        console.error('Error response data:', error.response.data);
-        console.error('Error response status:', error.response.status);
-        console.error('Error response headers:', error.response.headers);
-        toast.error(error.response.data.message || 'Failed to create booking');
-      } else if (error.request) {
-        console.error('Error request:', error.request);
-        toast.error('Network error - please try again');
-      } else {
-        console.error('Error message:', error.message);
-        toast.error('Failed to create booking');
-      }
+      toast.error(error.response?.data?.message || 'Failed to create booking');
     } finally {
       setBookingLoading(false);
+    }
+  };
+
+  const handleQuestionSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!session) {
+      toast.info('Please login to ask a question');
+      router.push(`/login?redirect=/motorcycles/${id}`);
+      return;
+    }
+    
+    if (!newQuestion.trim()) {
+      toast.error('Please enter a question');
+      return;
+    }
+    
+    setIsSubmittingQuestion(true);
+    
+    try {
+      const response = await axios.post('/api/questions', {
+        motorcycleId: id,
+        text: newQuestion.trim()
+      });
+      
+      // Add the new question to the list
+      if (response.data && response.data.question) {
+        setQuestions(Array.isArray(questions) ? [response.data.question, ...questions] : [response.data.question]);
+      } else {
+        setQuestions(Array.isArray(questions) ? questions : []);
+      }
+      setNewQuestion('');
+      toast.success('Your question has been submitted!');
+    } catch (error) {
+      console.error('Error submitting question:', error);
+      toast.error('Failed to submit question. Please try again.');
+    } finally {
+      setIsSubmittingQuestion(false);
     }
   };
 
@@ -196,23 +279,43 @@ export default function MotorcycleDetail() {
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             {/* Motorcycle Images */}
             <div className="relative h-96 w-full bg-gray-200">
+              {/* Motorcycle Image - use Next.js Image and imageUrl logic from MotorcycleCard */}
               {motorcycle.imageUrl ? (
-                <img 
+                <Image
                   src={motorcycle.imageUrl}
-                  alt={motorcycle.name}
-                  className="h-full w-full object-cover"
+                  alt={`${motorcycle.brand} ${motorcycle.model}`}
+                  fill
+                  style={{ objectFit: 'cover' }}
                   onError={(e) => {
-                    console.log('Image failed to load:', motorcycle.imageUrl);
+                    // fallback to placeholder if image fails
                     e.target.onerror = null;
                     e.target.src = placeholderImage;
                   }}
+                  priority
                 />
               ) : (
-                <img
-                  src={placeholderImage}
-                  alt="Motorcycle placeholder"
-                  className="h-full w-full object-cover"
-                />
+                <div className="h-full w-full flex items-center justify-center bg-gray-200">
+                  <div className="text-center">
+                    <span className="text-gray-400">No Image Available</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Hidden fallback for when all images fail */}
+              {false && (
+                <div className="h-full w-full flex items-center justify-center bg-gray-200">
+                  {console.log('Using placeholder image (no valid images found)')}
+                  <div className="text-center">
+                    <img
+                      src={placeholderImage}
+                      alt="Motorcycle placeholder"
+                      className="h-full w-full object-cover"
+                    />
+                    <p className="absolute bottom-4 left-0 right-0 text-white bg-black bg-opacity-50 py-2">
+                      {motorcycle.brand} {motorcycle.model}
+                    </p>
+                  </div>
+                </div>
               )}
               {!motorcycle.available && (
                 <div className="absolute top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md text-sm font-medium">
@@ -362,6 +465,90 @@ export default function MotorcycleDetail() {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Q&A Section */}
+          <div className="mt-8 bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Questions & Answers</h2>
+              
+              {/* Ask a Question Form */}
+              <form onSubmit={handleQuestionSubmit} className="mb-8">
+                <div className="mb-4">
+                  <label htmlFor="question" className="block text-sm font-medium text-gray-700 mb-1">
+                    Ask a Question
+                  </label>
+                  <textarea
+                    id="question"
+                    name="question"
+                    rows="3"
+                    value={newQuestion}
+                    onChange={(e) => setNewQuestion(e.target.value)}
+                    placeholder="What would you like to know about this motorcycle?"
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuestion || !newQuestion.trim()}
+                  className={`px-4 py-2 font-medium rounded-md ${isSubmittingQuestion || !newQuestion.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700'} text-white transition duration-300`}
+                >
+                  {isSubmittingQuestion ? 'Submitting...' : 'Submit Question'}
+                </button>
+              </form>
+              
+              {/* Questions List */}
+              <div className="space-y-6">
+                {isLoadingQuestions ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-600"></div>
+                  </div>
+                ) : questions.length > 0 ? (
+                  questions.map((question) => (
+                    <div key={question._id} className="border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                            <span className="text-yellow-800 font-semibold">
+                              {question.user?.name ? question.user.name.charAt(0).toUpperCase() : 'U'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-4 flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-semibold text-gray-900">
+                              {question.user?.name || 'User'} asked:
+                            </h4>
+                            <span className="text-xs text-gray-500">
+                              {new Date(question.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-700">{question.text}</p>
+                          
+                          {question.isAnswered && (
+                            <div className="mt-4 bg-gray-50 p-3 rounded-md">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-semibold text-gray-900">
+                                  Owner's Response:
+                                </h4>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(question.updatedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-sm text-gray-700">{typeof question.answer === 'object' && question.answer !== null ? question.answer.text : question.answer}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No questions yet. Be the first to ask!
+                  </div>
+                )}
               </div>
             </div>
           </div>

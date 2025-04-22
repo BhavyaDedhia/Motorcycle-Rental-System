@@ -13,28 +13,48 @@ export default function MotorcycleCard({ motorcycle }) {
     price,
     cc,
     location,
+    images,
     imageUrl,
     available
   } = motorcycle;
 
+  // Select the best image to display
+  let displayImage = null;
+  // Filter and sanitize images array
+  let validImages = Array.isArray(images)
+    ? images.filter(img => typeof img === 'string' && (img.startsWith('/') || img.startsWith('http') || img.startsWith('data:')))
+    : [];
+  // Sanitize imageUrl
+  let sanitizedImageUrl = (typeof imageUrl === 'string' && (imageUrl.startsWith('/') || imageUrl.startsWith('http') || imageUrl.startsWith('data:')))
+    ? imageUrl
+    : null;
+  if (validImages.length > 0) {
+    displayImage = validImages[0];
+  } else if (sanitizedImageUrl) {
+    displayImage = sanitizedImageUrl;
+  } else {
+    displayImage = '/images/motorcycle-placeholder.jpg';
+  }
+
   // Function to handle image loading errors
   const handleImageError = () => {
-    console.log('Image failed to load:', imageUrl);
+    console.log('Image failed to load:', displayImage);
     setImageError(true);
   };
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
       <div className="relative h-48 w-full">
-        {imageUrl && !imageError ? (
+        {displayImage && !imageError ? (
           <Image
-            src={imageUrl}
-            alt={`${brand} ${model}`}
-            layout="fill"
-            objectFit="cover"
+            src={displayImage}
+            alt={`₹{brand} ₹{model}`}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            style={{ objectFit: 'cover' }}
             className="transition-transform duration-300 hover:scale-105"
             onError={handleImageError}
-            unoptimized={imageUrl.includes('google.com')} // Skip optimization for Google images
+            unoptimized={displayImage.includes('google.com')} // Skip optimization for Google images
           />
         ) : (
           <div className="absolute inset-0 bg-gray-200 flex items-center justify-center">
@@ -56,7 +76,7 @@ export default function MotorcycleCard({ motorcycle }) {
             <h3 className="text-lg font-semibold text-gray-900">{brand} {model}</h3>
             <p className="text-sm text-gray-600">{year} • {cc}cc</p>
           </div>
-          <span className="text-lg font-bold text-yellow-600">${price}/day</span>
+          <span className="text-lg font-bold text-yellow-600">₹{price}/day</span>
         </div>
 
         <div className="flex items-center text-sm text-gray-600 mb-4">

@@ -170,7 +170,7 @@ export default function Contact() {
                   </div>
                   <div className="ml-3 text-gray-700">
                     <p className="font-medium">Email</p>
-                    <p>info@motocruise.com</p>
+                    <p>info@moto-rent.com</p>
                   </div>
                 </div>
                 

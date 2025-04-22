@@ -17,8 +17,9 @@ export default function Home() {
           <Image
             src="https://images.unsplash.com/photo-1558981806-ec527fa84c39?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80"
             alt="Motorcycle on scenic road"
-            layout="fill"
-            objectFit="cover"
+            fill
+            sizes="100vw"
+            style={{ objectFit: 'cover' }}
             priority
           />
           <div className="absolute inset-0 bg-black bg-opacity-50"></div>

@@ -58,7 +58,7 @@ export default function Layout({ children, title = 'Motorcycle Rental' }) {
         <header className="bg-gray-900 text-white shadow-md">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <Link href="/" className="text-2xl font-bold">
-              MotoCruise
+              MotoRent
             </Link>
 
             {/* Mobile menu button */}
@@ -140,7 +140,7 @@ export default function Layout({ children, title = 'Motorcycle Rental' }) {
                             setIsDropdownOpen(false);
                           }}
                         >
-                          My Bookings
+                          My Orders
                         </a>
                         <a 
                           href="/api/auth/signout?callbackUrl=/"
@@ -227,7 +227,7 @@ export default function Layout({ children, title = 'Motorcycle Rental' }) {
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div>
-                <h3 className="text-xl font-bold mb-4">MotoCruise</h3>
+                <h3 className="text-xl font-bold mb-4">MotoRent</h3>
                 <p className="text-gray-400">
                   Your premier destination for motorcycle rentals. Experience the thrill of the open road with our premium bikes.
                 </p>
@@ -254,13 +254,13 @@ export default function Layout({ children, title = 'Motorcycle Rental' }) {
                 <address className="text-gray-400 not-italic">
                   <p>123 Bike Street</p>
                   <p>Motorcycle City, MC 12345</p>
-                  <p className="mt-2">Email: info@motocruise.com</p>
+                  <p className="mt-2">Email: info@moto-rent.com</p>
                   <p>Phone: (123) 456-7890</p>
                 </address>
               </div>
             </div>
             <div className="border-t border-gray-800 mt-8 pt-6 text-center text-gray-400">
-              <p>&copy; {new Date().getFullYear()} MotoCruise. All rights reserved.</p>
+              <p>&copy; {new Date().getFullYear()} MotoRent. All rights reserved.</p>
             </div>
           </div>
         </footer>
