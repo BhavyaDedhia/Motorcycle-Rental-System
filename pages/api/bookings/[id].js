@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     await connectToDatabase();
 
     const booking = await Booking.findById(id)
-      .populate('motorcycle', 'name brand model price images')
+      .populate({ path: 'motorcycle', select: 'name brand model price images owner' })
       .populate('user', 'name email');
 
     if (!booking) {
@@ -40,7 +40,10 @@ export default async function handler(req, res) {
         return res.status(200).json(booking);
 
       case 'PATCH':
-        if (booking.user._id.toString() !== session.user.id) {
+        if (
+          booking.user._id.toString() !== session.user.id &&
+          booking.motorcycle.owner.toString() !== session.user.id
+        ) {
           return res.status(403).json({ error: 'You are not authorized to update this booking' });
         }
 
@@ -56,6 +59,11 @@ export default async function handler(req, res) {
             booking.cancellationReason = cancellationReason;
             booking.cancellationDate = new Date();
             booking.paymentStatus = 'refunded';
+            // Make motorcycle available again
+            const motorcycleId = booking.motorcycle._id || booking.motorcycle;
+            if (motorcycleId) {
+              await Motorcycle.findByIdAndUpdate(motorcycleId, { available: true });
+            }
           }
         }
 

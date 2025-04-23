@@ -323,36 +323,33 @@ export default function Dashboard() {
                         <div key={booking._id} className="bg-white rounded-lg shadow-md overflow-hidden">
                           <div className="p-4 sm:p-6">
                             <div className="flex flex-col sm:flex-row">
-                              <div className="relative h-32 w-full sm:w-40 flex-shrink-0 mb-4 sm:mb-0 bg-gray-200 rounded-md">
+                              <div className="relative h-40 w-full sm:w-56 flex-shrink-0 mb-4 sm:mb-0 bg-gray-200 rounded-md overflow-hidden">
                                 {(() => {
-  let displayImage = null;
-  if (Array.isArray(booking.motorcycle?.images) && booking.motorcycle.images.length > 0) {
-    const validImages = booking.motorcycle.images.filter(img => typeof img === 'string' && (img.startsWith('/') || img.startsWith('http') || img.startsWith('data:')));
-    if (validImages.length > 0) {
-      displayImage = validImages[0];
-    }
-  }
-  if (!displayImage && booking.motorcycle?.imageUrl && typeof booking.motorcycle.imageUrl === 'string') {
-    displayImage = booking.motorcycle.imageUrl;
-  }
-  if (displayImage) {
-    return (
-      <Image
-        src={displayImage}
-        alt={booking.motorcycle?.name || 'Motorcycle'}
-        layout="fill"
-        objectFit="cover"
-        onError={e => { e.target.onerror = null; e.target.src = '/placeholder.png'; }}
-      />
-    );
-  } else {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-        <span>No Image</span>
-      </div>
-    );
-  }
-})()}
+                                  let displayImage = null;
+                                  if (Array.isArray(booking.motorcycle?.images) && booking.motorcycle.images.length > 0) {
+                                    const validImages = booking.motorcycle.images.filter(img => typeof img === 'string' && (img.startsWith('/') || img.startsWith('http') || img.startsWith('data:')));
+                                    if (validImages.length > 0) {
+                                      displayImage = validImages[0];
+                                    }
+                                  }
+                                  if (displayImage) {
+                                    return (
+                                      <Image
+                                        src={displayImage}
+                                        alt={booking.motorcycle?.name || 'Motorcycle'}
+                                        layout="fill"
+                                        objectFit="cover"
+                                        onError={e => { e.target.onerror = null; e.target.src = '/placeholder.png'; }}
+                                      />
+                                    );
+                                  } else {
+                                    return (
+                                      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                                        <span>No Image</span>
+                                      </div>
+                                    );
+                                  }
+                                })()}
                               </div>
                               
                               <div className="sm:ml-6 flex-1">
@@ -367,6 +364,11 @@ export default function Dashboard() {
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
                                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                                   </span>
+                                  {booking.status === 'cancelled' && booking.cancellationReason && (
+                                    <div className="mt-2 text-xs text-red-700 bg-red-50 rounded p-2 border border-red-200">
+                                      <strong>Reason:</strong> {booking.cancellationReason}
+                                    </div>
+                                  )}
                                 </div>
                                 
                                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -408,23 +410,41 @@ export default function Dashboard() {
                                   >
                                     View Details
                                   </Link>
-                                  
-                                  {booking.status === 'pending' && (
+                                                                    {booking.status === 'pending' && (
                                     <>
-                                      <Link 
-                                        href={`/bookings/${booking._id}/confirm`}
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            await axios.patch(`/api/bookings/${booking._id}`, { status: 'confirmed' });
+                                            toast.success('Booking confirmed!');
+                                            fetchData();
+                                          } catch (err) {
+                                            toast.error('Failed to confirm booking');
+                                          }
+                                        }}
                                         className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                                       >
                                         Confirm
-                                      </Link>
-                                      <Link 
-                                        href={`/bookings/${booking._id}/reject`}
+                                      </button>
+                                      <button
+                                        onClick={async () => {
+                                          const reason = prompt('Enter reason for rejection:');
+                                          if (!reason) return;
+                                          try {
+                                            await axios.patch(`/api/bookings/${booking._id}`, { status: 'cancelled', cancellationReason: reason });
+                                            toast.success('Booking rejected!');
+                                            fetchData();
+                                          } catch (err) {
+                                            toast.error('Failed to reject booking');
+                                          }
+                                        }}
                                         className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                       >
                                         Reject
-                                      </Link>
+                                      </button>
                                     </>
                                   )}
+                                  {/* Show nothing if not pending: Confirm/Reject only for pending */}
                                 </div>
                               </div>
                             </div>

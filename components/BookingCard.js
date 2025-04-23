@@ -1,7 +1,10 @@
 import React from 'react';
 import Link from 'next/link';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import Image from 'next/image';
+
+import axios from 'axios';
+import { toast } from 'react-toastify';
 
 export default function BookingCard({ booking }) {
   // Get motorcycle data from the correct field
@@ -13,8 +16,9 @@ export default function BookingCard({ booking }) {
   const formattedStartDate = format(startDate, 'MMM dd, yyyy');
   const formattedEndDate = format(endDate, 'MMM dd, yyyy');
   
-  // Calculate rental duration
-  const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  // Calculate rental duration (inclusive of both start and end date)
+  let days = differenceInCalendarDays(endDate, startDate) + 1;
+  if (days < 1) days = 1;
   
   // Status badge color
   const getStatusColor = (status) => {
@@ -72,15 +76,7 @@ export default function BookingCard({ booking }) {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">{motorcycle?.name || 'Motorcycle'}</h3>
-                <div className="w-20 h-20 relative rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                  <Image
-                    src={typeof motorcycle.imageUrl === 'string' && (motorcycle.imageUrl.startsWith('/') || motorcycle.imageUrl.startsWith('http') || motorcycle.imageUrl.startsWith('data:')) ? motorcycle.imageUrl : '/images/motorcycle-placeholder.jpg'}
-                    alt={motorcycle.name}
-                    fill
-                    style={{ objectFit: 'cover' }}
-                    className="rounded-lg"
-                  />
-                </div>
+
                 <p className="text-sm text-gray-600">
                   {motorcycle?.brand} {motorcycle?.model} • {motorcycle?.year}
                 </p>
@@ -89,6 +85,11 @@ export default function BookingCard({ booking }) {
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
                 {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
               </span>
+              {booking.status === 'cancelled' && booking.cancellationReason && (
+                <div className="mt-2 text-xs text-red-700 bg-red-50 rounded p-2 border border-red-200">
+                  <strong>Reason:</strong> {booking.cancellationReason}
+                </div>
+              )}
             </div>
             
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -101,7 +102,7 @@ export default function BookingCard({ booking }) {
               
               <div>
                 <p className="text-sm text-gray-500">Total Price</p>
-                <p className="text-sm font-medium text-gray-900">₹{booking.totalPrice.toFixed(2)}</p>
+                <p className="text-sm font-medium text-gray-900">₹{motorcycle?.price && days ? (days * motorcycle.price).toFixed(2) : 'N/A'}</p>
               </div>
               
               <div>
@@ -132,12 +133,24 @@ export default function BookingCard({ booking }) {
               </Link>
               
               {booking.status === 'pending' && (
-                <Link 
-                  href={`/bookings/${booking._id}/cancel`}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                <button
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  onClick={async () => {
+                    try {
+                      // Cancel the booking
+                      await axios.patch(`/api/bookings/${booking._id}`, {
+                        status: 'cancelled',
+                        cancellationReason: 'Cancelled by user'
+                      });
+                      toast.success('Booking cancelled and vehicle is now available!');
+                      window.location.reload(); // Refresh to update UI
+                    } catch (error) {
+                      toast.error(error.response?.data?.error || 'Failed to cancel booking');
+                    }
+                  }}
                 >
                   Cancel Booking
-                </Link>
+                </button>
               )}
               
               {booking.status === 'confirmed' && booking.paymentStatus !== 'paid' && (

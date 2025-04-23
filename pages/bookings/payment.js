@@ -34,7 +34,7 @@ export default function Payment() {
     const fetchBookingDetails = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`/api/bookings/₹{bookingId}`);
+        const response = await axios.get(`/api/bookings/${bookingId}`);
         setBooking(response.data);
         
         if (response.data.motorcycle && typeof response.data.motorcycle === 'object') {
@@ -56,7 +56,7 @@ export default function Payment() {
     
     // Format card number with spaces every 4 digits
     if (name === 'cardNumber') {
-      const formatted = value.replace(/\s/g, '').replace(/(\d{4})/g, '₹1 ').trim();
+      const formatted = value.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim();
       setPaymentData({ ...paymentData, cardNumber: formatted });
       return;
     }

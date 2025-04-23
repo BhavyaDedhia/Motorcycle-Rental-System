@@ -194,9 +194,17 @@ export default function MotorcycleDetail() {
       
       toast.success('Booking created! Proceed to payment.');
       // Redirect to payment page instead of bookings list
-      router.push(`/bookings/payment?bookingId=${response.data._id}`);
+      const bookingId = response.data.booking?.id || response.data._id;
+if (bookingId) {
+  router.push(`/bookings/payment?bookingId=${bookingId}`);
+} else {
+  toast.error('Booking succeeded but no booking ID returned!');
+}
     } catch (error) {
       console.error('Error creating booking:', error);
+if (error.response && error.response.data) {
+  console.error('API error response:', error.response.data);
+}
       toast.error(error.response?.data?.message || 'Failed to create booking');
     } finally {
       setBookingLoading(false);
@@ -331,7 +339,7 @@ export default function MotorcycleDetail() {
                   <p className="text-lg text-gray-600 mt-1">{motorcycle.brand} {motorcycle.model} • {motorcycle.year}</p>
                 </div>
                 <div className="mt-4 md:mt-0">
-                  <p className="text-3xl font-bold text-yellow-600">${motorcycle.price}<span className="text-lg font-normal text-gray-600">/day</span></p>
+                  <p className="text-3xl font-bold text-yellow-600">₹{motorcycle.price}<span className="text-lg font-normal text-gray-600">/day</span></p>
                 </div>
               </div>
               
@@ -429,7 +437,7 @@ export default function MotorcycleDetail() {
                           <div className="mb-6 p-4 bg-gray-100 rounded-md">
                             <div className="flex justify-between items-center">
                               <span className="text-gray-700">Daily Rate:</span>
-                              <span className="font-medium">${motorcycle.price}</span>
+                              <span className="font-medium">₹{motorcycle.price}</span>
                             </div>
                             <div className="flex justify-between items-center mt-2">
                               <span className="text-gray-700">Duration:</span>
@@ -439,7 +447,7 @@ export default function MotorcycleDetail() {
                             </div>
                             <div className="border-t border-gray-200 my-2 pt-2 flex justify-between items-center">
                               <span className="font-medium text-gray-900">Total:</span>
-                              <span className="font-bold text-xl text-yellow-600">${totalPrice}</span>
+                              <span className="font-bold text-xl text-yellow-600">₹{totalPrice}</span>
                             </div>
                           </div>
                         )}

@@ -79,7 +79,8 @@ export default async function handler(req, res) {
     // Calculate total price
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    let days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    if (days < 1) days = 1;
     const totalPrice = days * motorcycle.price;
 
     // Create new booking
